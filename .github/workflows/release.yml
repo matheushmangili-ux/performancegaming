@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Package scripts
+        run: |
+          mkdir -p dist
+          cp Win11-Gaming-Audit.ps1 dist/
+          cp Win11-Gaming-Benchmark.ps1 dist/
+          cp Win11-Gaming-Sentinel.ps1 dist/
+          cp Install-Win11GamingSuite.ps1 dist/
+          cp README.md dist/
+          cp LICENSE dist/
+          cd dist && zip -r ../win11-gaming-suite-${{ github.ref_name }}.zip .
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log --pretty=format:"- %s" "$PREV_TAG"..HEAD)
+          else
+            CHANGES=$(git log --pretty=format:"- %s")
+          fi
+          echo "changes<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body: |
+            ## Win11 Gaming Suite ${{ github.ref_name }}
+
+            ### Instalacao one-liner
+
+            ```powershell
+            irm https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/Install-Win11GamingSuite.ps1 | iex
+            ```
+
+            ### Mudancas
+
+            ${{ steps.changelog.outputs.changes }}
+
+            ### Arquivos
+
+            Baixe `win11-gaming-suite-${{ github.ref_name }}.zip` abaixo ou use o one-liner acima.
+          files: |
+            win11-gaming-suite-${{ github.ref_name }}.zip
+            Win11-Gaming-Audit.ps1
+            Win11-Gaming-Benchmark.ps1
+            Win11-Gaming-Sentinel.ps1
+            Install-Win11GamingSuite.ps1
+          draft: false
+          prerelease: false

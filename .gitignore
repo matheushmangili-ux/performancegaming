@@ -1,0 +1,18 @@
+# WHITELIST MODE - repo vive em $HOME, precisamos ser paranoicos
+# Ignora tudo por padrao
+/*
+/.*
+
+# Whitelist apenas arquivos do projeto
+!/.gitignore
+!/.github/
+!/LICENSE
+!/README.md
+!/Install-Win11GamingSuite.ps1
+!/Win11-Gaming-Audit.ps1
+!/Win11-Gaming-Benchmark.ps1
+!/Win11-Gaming-Sentinel.ps1
+
+# Dentro de .github, permitir workflows
+!/.github/workflows/
+!/.github/workflows/*.yml
