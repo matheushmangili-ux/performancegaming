@@ -51,7 +51,8 @@ param(
     [switch]$SkipSlow,
     [switch]$Auto,
     [string]$Compare,
-    [switch]$Stage2
+    [switch]$Stage2,
+    [switch]$DeepClean
 )
 
 # ============================================================================
@@ -759,6 +760,117 @@ function Test-Temps {
     }
 }
 
+function Test-MouseAccel {
+    $ma = Get-RegValue 'HKCU:\Control Panel\Mouse' 'MouseSpeed'
+    $mt1 = Get-RegValue 'HKCU:\Control Panel\Mouse' 'MouseThreshold1'
+    $mt2 = Get-RegValue 'HKCU:\Control Panel\Mouse' 'MouseThreshold2'
+    if ($ma -ne '0' -or $mt1 -ne '0' -or $mt2 -ne '0') {
+        Add-Finding -Severity 'ALTO' -Category 'Input' -Title 'Mouse acceleration (Enhance Pointer Precision) ativo' `
+            -Current "MouseSpeed=$ma Thresholds=$mt1/$mt2" `
+            -Why 'Aceleracao de mouse e DESASTRE em FPS competitivo - mesmo movimento fisico gera deslocamentos diferentes dependendo da velocidade.' `
+            -Impact 'Muscle memory consistente. Critico em CS2/Valorant/Apex.' `
+            -FixCmd @'
+reg add "HKCU\Control Panel\Mouse" /v MouseSpeed /t REG_SZ /d "0" /f
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold1 /t REG_SZ /d "0" /f
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold2 /t REG_SZ /d "0" /f
+'@ `
+            -RevertCmd @'
+reg add "HKCU\Control Panel\Mouse" /v MouseSpeed /t REG_SZ /d "1" /f
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold1 /t REG_SZ /d "6" /f
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold2 /t REG_SZ /d "10" /f
+'@
+    }
+}
+
+function Test-FastStartup {
+    $fs = Get-RegValue 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power' 'HiberbootEnabled'
+    if ($fs -ne 0) {
+        Add-Finding -Severity 'MEDIO' -Category 'Energia' -Title 'Fast Startup habilitado' `
+            -Current "HiberbootEnabled=$fs" `
+            -Why 'Fast Startup e hibernacao parcial do kernel. Causa bugs de estado (drivers nao recarregam, VBS nao respeita toggle, rede as vezes congela no boot).' `
+            -Impact 'Boot mais limpo, sem estado corrompido.' `
+            -FixCmd 'reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d 0 /f' `
+            -RevertCmd 'reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d 1 /f'
+    }
+}
+
+function Test-SsdDefrag {
+    $t = schtasks /query /tn '\Microsoft\Windows\Defrag\ScheduledDefrag' 2>$null
+    if ($LASTEXITCODE -eq 0 -and $t -match 'Ready|Running|Pronto|Em execucao') {
+        $hasSSD = (Get-PhysicalDisk | Where-Object { $_.MediaType -eq 'SSD' -or $_.BusType -eq 'NVMe' }).Count -gt 0
+        if ($hasSSD) {
+            Add-Finding -Severity 'MEDIO' -Category 'Storage' -Title 'Defrag agendado ativo (com SSD presente)' `
+                -Current 'ScheduledDefrag=Ready' `
+                -Why 'Defrag em SSD nao ajuda e causa writes desnecessarios. Win11 tecnicamente roda ReTrim em SSD, mas a task agendada ainda dispara analise.' `
+                -Impact 'Menos writes, menor desgaste. Win11 faz TRIM automatico ainda.' `
+                -FixCmd 'schtasks /Change /TN "\Microsoft\Windows\Defrag\ScheduledDefrag" /Disable' `
+                -RevertCmd 'schtasks /Change /TN "\Microsoft\Windows\Defrag\ScheduledDefrag" /Enable'
+        }
+    }
+}
+
+function Test-NduService {
+    $ndu = Get-RegValue 'HKLM:\SYSTEM\CurrentControlSet\Services\Ndu' 'Start'
+    if ($ndu -ne 4) {
+        Add-Finding -Severity 'INFO' -Category 'Rede' -Title 'Windows Network Data Usage (Ndu) ativo' `
+            -Current "Start=$ndu" `
+            -Why 'Ndu monitora uso de rede por app. Consome RAM passivamente. Pode adicionar microstutter em picos.' `
+            -Impact 'Pequena reducao de RAM e jitter de rede.' `
+            -FixCmd 'reg add "HKLM\SYSTEM\CurrentControlSet\Services\Ndu" /v Start /t REG_DWORD /d 4 /f' `
+            -RevertCmd 'reg add "HKLM\SYSTEM\CurrentControlSet\Services\Ndu" /v Start /t REG_DWORD /d 2 /f'
+    }
+}
+
+function Test-PageCombining {
+    $mm = Get-MMAgent -EA SilentlyContinue
+    if ($mm -and $mm.PageCombining) {
+        Add-Finding -Severity 'INFO' -Category 'Memoria' -Title 'Page Combining ativo' `
+            -Current 'True' `
+            -Why 'Consolida paginas de memoria identicas. CPU overhead baixo mas mensuravel.' `
+            -Impact 'Menos CPU em alocacao.' `
+            -FixCmd 'powershell -Command "Disable-MMAgent -PageCombining"' `
+            -RevertCmd 'powershell -Command "Enable-MMAgent -PageCombining"'
+    }
+}
+
+function Test-BackgroundApps {
+    $bg = Get-RegValue 'HKCU:\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications' 'GlobalUserDisabled'
+    if ($bg -ne 1) {
+        Add-Finding -Severity 'MEDIO' -Category 'Startup' -Title 'Background apps permitidas' `
+            -Current "GlobalUserDisabled=$bg" `
+            -Why 'Apps UWP rodam em background consumindo RAM/CPU mesmo quando nao usados.' `
+            -Impact 'Menos processos, mais RAM livre.' `
+            -FixCmd 'reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /t REG_DWORD /d 1 /f' `
+            -RevertCmd 'reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications" /v GlobalUserDisabled /f'
+    }
+}
+
+function Test-DefenderExclusions {
+    # Verifica exclusoes de jogos conhecidos
+    try {
+        $prefs = Get-MpPreference -EA Stop
+        $excludedPaths = @($prefs.ExclusionPath)
+        $gameFolders = @(
+            "$env:ProgramFiles\Epic Games",
+            "$env:ProgramFiles(x86)\Steam\steamapps",
+            "$env:ProgramFiles(x86)\Riot Games"
+        ) | Where-Object { Test-Path $_ }
+
+        $missing = $gameFolders | Where-Object { $_ -notin $excludedPaths }
+        if ($missing.Count -gt 0) {
+            $adviceCmd = ($missing | ForEach-Object { "powershell -Command `"Add-MpPreference -ExclusionPath '$_'`"" }) -join "`r`n"
+            Add-Finding -Severity 'ALTO' -Category 'Seguranca' -Title 'Windows Defender scaneando pastas de jogos' `
+                -Current "$($missing.Count) pasta(s) sem exclusao" `
+                -Why 'Defender faz scan em tempo real. Em jogos com muita leitura de asset (open world, MMO), causa stutters por I/O.' `
+                -Impact '+3-10% carregamento, fim de stutters em loading de area. TRADEOFF: exclusoes reduzem superficie de deteccao.' `
+                -FixCmd $adviceCmd `
+                -RevertCmd (($missing | ForEach-Object { "powershell -Command `"Remove-MpPreference -ExclusionPath '$_'`"" }) -join "`r`n")
+        }
+    } catch {
+        # Get-MpPreference falhou (Defender off?)
+    }
+}
+
 function Test-Games {
     if ($SkipSlow) { return }
     $libs = Get-GameLibraries
@@ -775,6 +887,93 @@ function Test-Games {
 # ============================================================================
 # EXECUTAR
 # ============================================================================
+function Invoke-DeepClean {
+    Write-Host ""
+    Write-Host "  LIMPEZA PROFUNDA" -ForegroundColor Magenta
+    Write-Host ('  ' + ('-' * 60)) -ForegroundColor DarkGray
+    Write-Host "  Isso vai limpar: temp, Prefetch, DNS, shader cache (opcional)" -ForegroundColor Yellow
+    Write-Host "  Pressione Y para continuar, N para cancelar: " -NoNewline -ForegroundColor Cyan
+    if ((Read-Host) -notmatch '^[Yy]') { return }
+
+    $totalFreed = 0
+
+    # Temp user
+    Write-Host "  -> Limpando %TEMP%..." -ForegroundColor Cyan
+    $sizeBefore = (Get-ChildItem $env:TEMP -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum).Sum
+    Remove-Item "$env:TEMP\*" -Recurse -Force -EA SilentlyContinue
+    $sizeAfter = (Get-ChildItem $env:TEMP -Recurse -Force -EA SilentlyContinue | Measure-Object Length -Sum).Sum
+    $freed = [math]::Round(($sizeBefore - $sizeAfter)/1MB, 1)
+    $totalFreed += $freed
+    Write-Host "     liberados: $freed MB" -ForegroundColor Green
+
+    # Windows Temp
+    Write-Host "  -> Limpando C:\Windows\Temp..." -ForegroundColor Cyan
+    Remove-Item "$env:SystemRoot\Temp\*" -Recurse -Force -EA SilentlyContinue
+    Write-Host "     OK" -ForegroundColor Green
+
+    # Prefetch (Windows recria os relevantes rapidamente)
+    Write-Host "  -> Limpando Prefetch..." -ForegroundColor Cyan
+    Remove-Item "$env:SystemRoot\Prefetch\*" -Recurse -Force -EA SilentlyContinue
+    Write-Host "     OK (Windows recria os relevantes no proximo boot)" -ForegroundColor Green
+
+    # DNS flush
+    Write-Host "  -> Flush DNS cache..." -ForegroundColor Cyan
+    ipconfig /flushdns | Out-Null
+    Write-Host "     OK" -ForegroundColor Green
+
+    # Software Distribution (Windows Update cache)
+    Write-Host "  -> Limpando SoftwareDistribution\Download..." -ForegroundColor Cyan
+    Stop-Service wuauserv -Force -EA SilentlyContinue
+    Remove-Item "$env:SystemRoot\SoftwareDistribution\Download\*" -Recurse -Force -EA SilentlyContinue
+    Start-Service wuauserv -EA SilentlyContinue
+    Write-Host "     OK" -ForegroundColor Green
+
+    # Delivery Optimization
+    Write-Host "  -> Delivery Optimization cache..." -ForegroundColor Cyan
+    try { Delete-DeliveryOptimizationCache -EA Stop; Write-Host "     OK" -ForegroundColor Green }
+    catch { Write-Host "     pulado (cmdlet nao disponivel)" -ForegroundColor DarkGray }
+
+    # Shader cache (AVISO: piora 10-30min depois)
+    Write-Host ""
+    Write-Host "  ATENCAO: apagar shader cache PIORA performance por 10-30min apos primeiro jogo." -ForegroundColor Yellow
+    Write-Host "  Util apenas se suspeita de cache corrompido (stutter novo sem motivo)." -ForegroundColor Yellow
+    Write-Host "  Apagar shader cache? [Y/N]: " -NoNewline -ForegroundColor Cyan
+    if ((Read-Host) -match '^[Yy]') {
+        $caches = @(
+            "$env:USERPROFILE\AppData\LocalLow\NVIDIA\DXCache",
+            "$env:USERPROFILE\AppData\LocalLow\NVIDIA\GLCache",
+            "$env:USERPROFILE\AppData\Local\NVIDIA\DXCache",
+            "$env:USERPROFILE\AppData\Local\NVIDIA\GLCache",
+            "$env:USERPROFILE\AppData\Roaming\NVIDIA\ComputeCache",
+            "$env:LOCALAPPDATA\AMD\DxCache",
+            "$env:LOCALAPPDATA\AMD\GLCache",
+            "$env:LOCALAPPDATA\D3DSCache"
+        )
+        foreach ($c in $caches) {
+            if (Test-Path $c) {
+                Remove-Item "$c\*" -Recurse -Force -EA SilentlyContinue
+                Write-Host "     limpo: $c" -ForegroundColor Gray
+            }
+        }
+    }
+
+    # Icon cache rebuild
+    Write-Host ""
+    Write-Host "  Rebuild icon/thumb cache? (fix de icones bugados) [Y/N]: " -NoNewline -ForegroundColor Cyan
+    if ((Read-Host) -match '^[Yy]') {
+        Stop-Process -Name explorer -Force -EA SilentlyContinue
+        Remove-Item "$env:LOCALAPPDATA\IconCache.db" -Force -EA SilentlyContinue
+        Remove-Item "$env:LOCALAPPDATA\Microsoft\Windows\Explorer\iconcache_*" -Force -EA SilentlyContinue
+        Remove-Item "$env:LOCALAPPDATA\Microsoft\Windows\Explorer\thumbcache_*" -Force -EA SilentlyContinue
+        Start-Process explorer.exe
+        Write-Host "     OK (explorer reiniciado)" -ForegroundColor Green
+    }
+
+    Write-Host ""
+    Write-Host "  DEEP CLEAN concluido. Total liberado estimado: ~$totalFreed MB em TEMP." -ForegroundColor Green
+    Write-Host ""
+}
+
 function Invoke-Audit {
     $findings.Clear(); $advisories.Clear()
     $tests = @(
@@ -792,6 +991,13 @@ function Invoke-Audit {
         @{Name='Test-Timer';        Label='Timer de sistema'}
         @{Name='Test-RamXmp';       Label='RAM XMP/EXPO'}
         @{Name='Test-Temps';        Label='Temperaturas'}
+        @{Name='Test-MouseAccel';   Label='Mouse acceleration'}
+        @{Name='Test-FastStartup';  Label='Fast Startup'}
+        @{Name='Test-SsdDefrag';    Label='Defrag agendado em SSD'}
+        @{Name='Test-NduService';   Label='Ndu service'}
+        @{Name='Test-PageCombining';Label='Page Combining'}
+        @{Name='Test-BackgroundApps';Label='Background apps UWP'}
+        @{Name='Test-DefenderExclusions';Label='Defender exclusions'}
         @{Name='Test-Games';        Label='Biblioteca de jogos'}
     )
     Write-Host ""
@@ -1055,6 +1261,7 @@ function Start-WatchMode {
 # MAIN
 # ============================================================================
 if ($Watch -gt 0) { Start-WatchMode -Minutes $Watch; exit }
+if ($DeepClean) { Invoke-DeepClean; exit }
 
 # ============================================================================
 # COMPARE MODE

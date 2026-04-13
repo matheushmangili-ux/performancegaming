@@ -12,6 +12,7 @@
 !/Win11-Gaming-Audit.ps1
 !/Win11-Gaming-Benchmark.ps1
 !/Win11-Gaming-Sentinel.ps1
+!/Setup-DiscordServer.ps1
 
 # Dentro de .github, permitir workflows
 !/.github/workflows/
