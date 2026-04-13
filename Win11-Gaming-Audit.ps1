@@ -48,7 +48,10 @@ param(
     [switch]$RemoveBloat,
     [int]$Watch = 0,
     [switch]$WithTemps,
-    [switch]$SkipSlow
+    [switch]$SkipSlow,
+    [switch]$Auto,
+    [string]$Compare,
+    [switch]$Stage2
 )
 
 # ============================================================================
@@ -78,6 +81,77 @@ $ProgressPreference    = 'SilentlyContinue'
 # ============================================================================
 # ANIMACOES (TUI)
 # ============================================================================
+function Show-FlowDiagram {
+    Write-Host ""
+    Write-Host "  COMO FUNCIONA O FLUXO:" -ForegroundColor White
+    Write-Host ""
+    Write-Host "    +-----------------+     +-----------------+     +-----------------+" -ForegroundColor DarkCyan
+    Write-Host "    |   1. SCAN       |---->|   2. FIX.BAT    |---->|  3. APLICAR     |" -ForegroundColor DarkCyan
+    Write-Host "    |   (read-only)   |     |  (gerado sob    |     |  + RESTORE PT   |" -ForegroundColor DarkCyan
+    Write-Host "    |   acha erros    |     |   medida p/voce)|     |  + REBOOT       |" -ForegroundColor DarkCyan
+    Write-Host "    +-----------------+     +-----------------+     +--------+--------+" -ForegroundColor DarkCyan
+    Write-Host "                                                              |" -ForegroundColor DarkCyan
+    Write-Host "    +-----------------+     +-----------------+              v" -ForegroundColor DarkCyan
+    Write-Host "    |  5. SENTINEL    |<----|  4. RE-SCAN     |<---- (reinicia PC)" -ForegroundColor DarkCyan
+    Write-Host "    |  monitora drift |     |  + COMPARE      |" -ForegroundColor DarkCyan
+    Write-Host "    |  pos Windows Up |     |  antes x depois |" -ForegroundColor DarkCyan
+    Write-Host "    +-----------------+     +-----------------+" -ForegroundColor DarkCyan
+    Write-Host ""
+    Write-Host "  MODO AUTO: 1 comando faz passos 1-4 sozinho" -ForegroundColor Yellow
+    Write-Host "    .\Win11-Gaming-Audit.ps1 -Auto" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  MODO MANUAL: cada passo separado" -ForegroundColor Yellow
+    Write-Host "    1) .\Win11-Gaming-Audit.ps1                 (so scan)" -ForegroundColor Gray
+    Write-Host "    2) .\Win11-Gaming-Audit.ps1 -GenerateFix    (gera .bat)" -ForegroundColor Gray
+    Write-Host "    3) .\Win11-Gaming-Fix-Balanced.bat          (voce roda)" -ForegroundColor Gray
+    Write-Host "    4) reiniciar + .\Win11-Gaming-Audit.ps1     (valida)" -ForegroundColor Gray
+    Write-Host "    5) .\Win11-Gaming-Sentinel.ps1 -Install     (blinda)" -ForegroundColor Gray
+    Write-Host ""
+}
+
+function Show-StartupMenu {
+    Show-FlowDiagram
+    Write-Host "  O que voce quer fazer agora?" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "    [1] Somente SCAN  (read-only, nao modifica nada) - RECOMENDADO comecar aqui" -ForegroundColor White
+    Write-Host "    [2] AUTO  (scan + fix + reboot + compare automatico)" -ForegroundColor White
+    Write-Host "    [3] Gerar FIX.BAT  (scan + gera .bat, voce aplica depois)" -ForegroundColor White
+    Write-Host "    [4] COMPARAR  dois audits antigos (JSONs)" -ForegroundColor White
+    Write-Host "    [5] INSTALAR SENTINEL  (monitora drift pos-update)" -ForegroundColor White
+    Write-Host "    [H] Help - explicacao detalhada" -ForegroundColor DarkGray
+    Write-Host "    [X] Sair" -ForegroundColor DarkGray
+    Write-Host ""
+    $c = Read-Host "  Escolha"
+    return $c
+}
+
+function Show-Help {
+    Clear-Host
+    Show-FlowDiagram
+    Write-Host "  PROFILES (quao agressivo):" -ForegroundColor White
+    Write-Host "    Safe         - so criticos (MPO, TRIM, etc). Minimo risco." -ForegroundColor Gray
+    Write-Host "    Balanced     - criticos + altos. DEFAULT recomendado." -ForegroundColor Gray
+    Write-Host "    Competitive  - tudo. Para pro players competitivos." -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  FLAGS DISPONIVEIS:" -ForegroundColor White
+    Write-Host "    -Auto              Fluxo completo automatico (scan->fix->reboot->compare)" -ForegroundColor Gray
+    Write-Host "    -GenerateFix       Gera Win11-Gaming-Fix-<Profile>.bat + Revert.bat" -ForegroundColor Gray
+    Write-Host "    -Profile X         Safe | Balanced | Competitive" -ForegroundColor Gray
+    Write-Host "    -RemoveBloat       Remove bloatware via winget (interativo)" -ForegroundColor Gray
+    Write-Host "    -Watch N           Re-audita a cada N minutos" -ForegroundColor Gray
+    Write-Host "    -Compare a.json,b.json   Compara dois audits" -ForegroundColor Gray
+    Write-Host "    -WithTemps         Tenta ler temperaturas (WMI limitado)" -ForegroundColor Gray
+    Write-Host "    -OutputHtml x      Caminho custom do HTML" -ForegroundColor Gray
+    Write-Host "    -OutputJson x      Caminho custom do JSON (append historico)" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  SCRIPTS COMPLEMENTARES:" -ForegroundColor White
+    Write-Host "    Win11-Gaming-Benchmark.ps1  - mede FPS real via PresentMon antes/depois" -ForegroundColor Gray
+    Write-Host "    Win11-Gaming-Sentinel.ps1   - detecta drift pos Windows Update" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  Pressione qualquer tecla para voltar..." -ForegroundColor DarkGray
+    $null = [Console]::ReadKey($true)
+}
+
 function Show-IntroBanner {
     Clear-Host
     $art = @(
@@ -181,6 +255,77 @@ $cs   = Get-CimInstance Win32_ComputerSystem
 $cpu  = Get-CimInstance Win32_Processor | Select-Object -First 1
 $gpus = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -notmatch 'Basic|Remote|Meta|Parsec' }
 $ram  = [math]::Round($cs.TotalPhysicalMemory/1GB,1)
+
+function Get-HardwareInventory {
+    $inv = [ordered]@{}
+    $bb = Get-CimInstance Win32_BaseBoard -EA SilentlyContinue
+    $inv.Motherboard = if ($bb) { "$($bb.Manufacturer) $($bb.Product) (rev $($bb.Version))" } else { 'N/A' }
+    $bios = Get-CimInstance Win32_BIOS -EA SilentlyContinue
+    $inv.BIOS = if ($bios) { "$($bios.Manufacturer) $($bios.SMBIOSBIOSVersion) ($($bios.ReleaseDate.Substring(0,8)))" } else { 'N/A' }
+    $encl = Get-CimInstance Win32_SystemEnclosure -EA SilentlyContinue
+    $types = @{1='Other';2='Unknown';3='Desktop';4='Low Profile Desktop';5='Pizza Box';6='Mini Tower';7='Tower';8='Portable';9='Laptop';10='Notebook';11='Hand Held';13='All in One';14='Sub Notebook'}
+    $inv.Chassis = if ($encl) { $types[[int]$encl.ChassisTypes[0]] } else { 'N/A' }
+    $mods = @(Get-CimInstance Win32_PhysicalMemory)
+    $ramDetails = $mods | ForEach-Object {
+        $type = switch ([int]$_.SMBIOSMemoryType) { 26{'DDR4'} 34{'DDR5'} 24{'DDR3'} default{"Type$($_.SMBIOSMemoryType)"} }
+        $cap = [math]::Round($_.Capacity/1GB,0)
+        "$($_.Manufacturer.Trim()) $($_.PartNumber.Trim()) ${cap}GB $type @$($_.ConfiguredClockSpeed)MHz/$($_.Speed)MHz (slot $($_.DeviceLocator))"
+    }
+    $inv.RAM_Modules = $ramDetails
+    $inv.RAM_Total = "$([math]::Round(($mods | Measure-Object Capacity -Sum).Sum/1GB,1)) GB ($($mods.Count)x)"
+    $inv.CPU = "$($cpu.Name.Trim()) | $($cpu.NumberOfCores)C/$($cpu.NumberOfLogicalProcessors)T | base $($cpu.MaxClockSpeed)MHz | socket $($cpu.SocketDesignation)"
+    $inv.GPUs = $gpus | ForEach-Object {
+        $vram = if ($_.AdapterRAM) { [math]::Round($_.AdapterRAM/1GB,1) } else { '?' }
+        "$($_.Name) | ${vram}GB VRAM | driver $($_.DriverVersion)"
+    }
+    $inv.Storage = Get-PhysicalDisk | ForEach-Object {
+        $size = [math]::Round($_.Size/1GB,0)
+        "$($_.FriendlyName) | ${size}GB | $($_.MediaType) | $($_.BusType)"
+    }
+    $inv.Network = Get-NetAdapter | Where-Object Status -eq 'Up' | ForEach-Object {
+        "$($_.InterfaceDescription) | $($_.LinkSpeed) | MAC $($_.MacAddress)"
+    }
+    try {
+        $monitors = Get-CimInstance -Namespace root\wmi -ClassName WmiMonitorID -EA Stop
+        $inv.Monitors = $monitors | ForEach-Object {
+            $name = -join ($_.UserFriendlyName | Where-Object { $_ -ne 0 } | ForEach-Object {[char]$_})
+            $mfg  = -join ($_.ManufacturerName | Where-Object { $_ -ne 0 } | ForEach-Object {[char]$_})
+            "$mfg $name"
+        }
+    } catch { $inv.Monitors = @('N/A') }
+    $inv.Audio = Get-CimInstance Win32_SoundDevice -EA SilentlyContinue | Where-Object Status -eq 'OK' | ForEach-Object { $_.Name }
+    try {
+        $fans = Get-CimInstance Win32_Fan -EA Stop
+        $inv.Fans = if ($fans) { $fans | ForEach-Object { "$($_.Name) @ $($_.DesiredSpeed) RPM" } } else { @('Nao detectado via WMI (normal em desktop - use HWiNFO64/FanControl)') }
+    } catch { $inv.Fans = @('Nao detectado via WMI (normal em desktop - use HWiNFO64/FanControl)') }
+    $bat = Get-CimInstance Win32_Battery -EA SilentlyContinue
+    if ($bat) { $inv.Battery = "$($bat.Name) | design $($bat.DesignCapacity)mWh" }
+    try {
+        $tpm = Get-Tpm -EA Stop
+        $inv.TPM = "Present=$($tpm.TpmPresent) Ready=$($tpm.TpmReady)"
+    } catch { $inv.TPM = 'N/A' }
+    return $inv
+}
+
+function Show-Hardware {
+    param($inv)
+    Write-Host ""
+    Write-Host ('=' * 74) -ForegroundColor Magenta
+    Write-Host "   HARDWARE INVENTORY" -ForegroundColor Magenta
+    Write-Host ('=' * 74) -ForegroundColor Magenta
+    foreach ($k in $inv.Keys) {
+        $v = $inv[$k]
+        if ($v -is [array] -or $v -is [System.Collections.IList]) {
+            Write-Host ("  {0}:" -f $k) -ForegroundColor Cyan
+            $v | ForEach-Object { Write-Host "     $_" -ForegroundColor Gray }
+        } else {
+            Write-Host ("  {0,-14}: " -f $k) -ForegroundColor Cyan -NoNewline
+            Write-Host $v -ForegroundColor Gray
+        }
+    }
+    Write-Host ('=' * 74) -ForegroundColor Magenta
+    Write-Host ""
+}
 
 function Get-GpuVendor {
     $names = ($gpus | Select-Object -ExpandProperty Name) -join ' '
@@ -752,6 +897,18 @@ small{color:#8b949e}.adv{background:#1f2328;padding:12px;border-left:4px solid #
 <div class="score $scoreClass">$($stats.Score) / 100</div>
 <div>$(($findings|? Severity -ne 'OK').Count) achados &middot; $($stats.Critical) criticos &middot; $($stats.High) altos</div>
 </div>
+<details open style="background:#161b22;padding:16px;border-radius:8px;margin-bottom:20px">
+<summary style="cursor:pointer;color:#58a6ff;font-weight:bold">Hardware Inventory</summary>
+<table style="margin-top:12px"><tbody>
+$($hardware.Keys | ForEach-Object {
+    $v = $hardware[$_]
+    if ($v -is [array] -or $v -is [System.Collections.IList]) {
+        "<tr><td style='font-weight:bold;vertical-align:top;color:#58a6ff'>$_</td><td>$(($v | ForEach-Object { & $enc $_ }) -join '<br>')</td></tr>"
+    } else {
+        "<tr><td style='font-weight:bold;color:#58a6ff'>$_</td><td>$(& $enc $v)</td></tr>"
+    }
+} | Out-String)
+</tbody></table></details>
 $(if($advisories.Count){"<div class='adv'><strong>Advisories</strong><ul>$advHtml</ul></div>"})
 <table><thead><tr><th>Sev</th><th>Cat</th><th>Achado</th><th>Por que</th><th>Impacto</th><th>Fix</th></tr></thead>
 <tbody>$($rows -join "`n")</tbody></table></body></html>
@@ -771,6 +928,7 @@ function Render-Json {
             gpu=(($gpus|%{$_.Name}) -join ' | '); gpuVendor=$gpuVendor
             ramGB=$ram
         }
+        hardware = $hardware
         score = $stats
         findings = $findings
         advisories = $advisories
@@ -896,12 +1054,236 @@ function Start-WatchMode {
 # ============================================================================
 # MAIN
 # ============================================================================
-if ($Watch -gt 0) {
-    Start-WatchMode -Minutes $Watch
+if ($Watch -gt 0) { Start-WatchMode -Minutes $Watch; exit }
+
+# ============================================================================
+# COMPARE MODE
+# ============================================================================
+function Compare-Audits {
+    param($BeforePath, $AfterPath)
+    $b = Get-Content $BeforePath -Raw | ConvertFrom-Json
+    $a = Get-Content $AfterPath  -Raw | ConvertFrom-Json
+    if ($b -is [array]) { $b = $b[0] }
+    if ($a -is [array]) { $a = $a[-1] }
+
+    Clear-Host
+    $line = ('=' * 92)
+    Write-Host $line -ForegroundColor Cyan
+    Write-Host "   COMPARATIVO ANTES vs DEPOIS" -ForegroundColor Cyan
+    Write-Host "   Antes:  $($b.timestamp.Substring(0,16))  -  Score $($b.score.Score)/100" -ForegroundColor Gray
+    Write-Host "   Depois: $($a.timestamp.Substring(0,16))  -  Score $($a.score.Score)/100" -ForegroundColor Gray
+    Write-Host $line -ForegroundColor Cyan
+
+    # Score delta
+    $delta = $a.score.Score - $b.score.Score
+    $deltaColor = if ($delta -gt 0) {'Green'} elseif ($delta -lt 0) {'Red'} else {'Yellow'}
+    $sign = if ($delta -ge 0) {'+'} else {''}
+    Write-Host ""
+    Write-Host ("  SCORE DELTA: $sign$delta pontos") -ForegroundColor $deltaColor
+    Write-Host ""
+
+    # Tabela por finding
+    Write-Host ("  {0,-12} {1,-14} {2,-50} {3,-10}" -f 'CATEGORIA','SEVERIDADE','ACHADO','STATUS') -ForegroundColor White
+    Write-Host ('-' * 92) -ForegroundColor DarkGray
+
+    $allTitles = @($b.findings + $a.findings | ForEach-Object { "$($_.Category)||$($_.Title)" } | Select-Object -Unique)
+    $fixed = 0; $regressed = 0; $unchanged = 0; $still = 0
+
+    foreach ($key in ($allTitles | Sort-Object)) {
+        $cat, $title = $key -split '\|\|', 2
+        $bf = $b.findings | Where-Object { $_.Category -eq $cat -and $_.Title -eq $title } | Select-Object -First 1
+        $af = $a.findings | Where-Object { $_.Category -eq $cat -and $_.Title -eq $title } | Select-Object -First 1
+
+        $bSev = if ($bf) { $bf.Severity } else { '-' }
+        $aSev = if ($af) { $af.Severity } else { '-' }
+        $sev = if ($af) { $af.Severity } else { $bSev }
+
+        $status = ''; $color = 'Gray'
+        if ($bSev -ne 'OK' -and $bSev -ne '-' -and ($aSev -eq 'OK' -or $aSev -eq '-')) {
+            $status = 'CORRIGIDO'; $color = 'Green'; $fixed++
+        } elseif (($bSev -eq 'OK' -or $bSev -eq '-') -and $aSev -ne 'OK' -and $aSev -ne '-') {
+            $status = 'REGREDIU';  $color = 'Red'; $regressed++
+        } elseif ($bSev -eq $aSev -and $bSev -ne 'OK') {
+            $status = 'PERSISTE';  $color = 'Yellow'; $still++
+        } elseif ($bSev -eq $aSev) {
+            $status = 'IGUAL';     $color = 'DarkGray'; $unchanged++
+        } else {
+            $status = "$bSev->$aSev"; $color = 'Cyan'
+        }
+
+        $titleShort = if ($title.Length -gt 50) { $title.Substring(0,47) + '...' } else { $title }
+        Write-Host ("  {0,-12} {1,-14} {2,-50} " -f $cat, $sev, $titleShort) -NoNewline
+        Write-Host ("{0,-10}" -f $status) -ForegroundColor $color
+    }
+
+    Write-Host ('-' * 92) -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  RESUMO:" -ForegroundColor White
+    Write-Host "    Corrigidos: $fixed" -ForegroundColor Green
+    Write-Host "    Persistem:  $still"   -ForegroundColor Yellow
+    Write-Host "    Regrediram: $regressed" -ForegroundColor Red
+    Write-Host "    Iguais:     $unchanged" -ForegroundColor DarkGray
+    Write-Host ""
+
+    # HTML comparativo
+    $htmlPath = ".\audit-compare-$(Get-Date -Format 'yyyyMMdd-HHmm').html"
+    $rows = foreach ($key in ($allTitles | Sort-Object)) {
+        $cat, $title = $key -split '\|\|', 2
+        $bf = $b.findings | Where-Object { $_.Category -eq $cat -and $_.Title -eq $title } | Select-Object -First 1
+        $af = $a.findings | Where-Object { $_.Category -eq $cat -and $_.Title -eq $title } | Select-Object -First 1
+        $bSev = if ($bf) { $bf.Severity } else { '-' }
+        $aSev = if ($af) { $af.Severity } else { '-' }
+        $status='';$cls='neutral'
+        if ($bSev -ne 'OK' -and $bSev -ne '-' -and ($aSev -eq 'OK' -or $aSev -eq '-')) { $status='CORRIGIDO'; $cls='fixed' }
+        elseif (($bSev -eq 'OK' -or $bSev -eq '-') -and $aSev -ne 'OK' -and $aSev -ne '-') { $status='REGREDIU'; $cls='regress' }
+        elseif ($bSev -eq $aSev -and $bSev -ne 'OK') { $status='PERSISTE'; $cls='persist' }
+        else { $status='IGUAL'; $cls='neutral' }
+        "<tr class='$cls'><td>$cat</td><td>$([System.Web.HttpUtility]::HtmlEncode($title))</td><td>$bSev</td><td>$aSev</td><td><strong>$status</strong></td></tr>"
+    }
+    Add-Type -AssemblyName System.Web -EA SilentlyContinue
+    @"
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Audit Compare</title><style>
+body{font-family:Segoe UI,system-ui;background:#0d1117;color:#c9d1d9;margin:0;padding:20px}
+h1{color:#58a6ff}.score{font-size:32px;font-weight:bold}.good{color:#3fb950}.bad{color:#f85149}
+table{width:100%;border-collapse:collapse;background:#161b22;border-radius:8px;overflow:hidden;margin-top:20px}
+th{background:#21262d;padding:12px;text-align:left}td{padding:10px;border-bottom:1px solid #30363d}
+tr.fixed td{background:#0d3a1e}tr.regress td{background:#3a0d0d}tr.persist td{background:#3a2a0d}
+.summary{display:flex;gap:20px;margin:20px 0}
+.card{background:#161b22;padding:16px;border-radius:8px;flex:1;text-align:center}
+</style></head><body>
+<h1>Comparativo: Antes vs Depois</h1>
+<div class="summary">
+<div class="card"><div>Score Antes</div><div class="score">$($b.score.Score)/100</div></div>
+<div class="card"><div>Score Depois</div><div class="score $(if($a.score.Score -ge $b.score.Score){'good'}else{'bad'})">$($a.score.Score)/100</div></div>
+<div class="card"><div>Delta</div><div class="score $(if($delta -ge 0){'good'}else{'bad'})">$sign$delta</div></div>
+<div class="card"><div>Corrigidos</div><div class="score good">$fixed</div></div>
+<div class="card"><div>Persistem</div><div class="score" style="color:#d29922">$still</div></div>
+<div class="card"><div>Regrediram</div><div class="score bad">$regressed</div></div>
+</div>
+<table><thead><tr><th>Categoria</th><th>Achado</th><th>Antes</th><th>Depois</th><th>Status</th></tr></thead>
+<tbody>$($rows -join "`n")</tbody></table>
+</body></html>
+"@ | Out-File $htmlPath -Encoding UTF8
+    Write-Host "  HTML comparativo: $htmlPath" -ForegroundColor Green
+    Start-Process $htmlPath
+}
+
+if ($Compare) {
+    $paths = $Compare -split ','
+    if ($paths.Count -ne 2) { Write-Host "Use: -Compare `"before.json,after.json`"" -ForegroundColor Red; exit 1 }
+    Compare-Audits -BeforePath $paths[0].Trim() -AfterPath $paths[1].Trim()
     exit
 }
 
+# ============================================================================
+# AUTO MODE - fluxo completo em 1 comando
+# ============================================================================
+$autoDir = Join-Path $env:LOCALAPPDATA 'Win11GamingAudit'
+if (-not (Test-Path $autoDir)) { New-Item $autoDir -ItemType Directory -Force | Out-Null }
+$beforeJson = Join-Path $autoDir 'before.json'
+$afterJson  = Join-Path $autoDir 'after.json'
+$runOnceKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce'
+
+if ($Auto -and -not $Stage2) {
+    # STAGE 1: scan baseline, apply fix, schedule post-reboot
+    Show-IntroBanner
+    $hardware = Get-HardwareInventory
+    Show-Hardware $hardware
+    Write-Host "  MODO AUTO - Stage 1/2" -ForegroundColor Magenta
+    Write-Host "  Profile: $Profile" -ForegroundColor Magenta
+    Write-Host ""
+
+    Invoke-Audit
+    $stats = Render-Console
+    Show-ScoreReveal -Score $stats.Score
+
+    # Save baseline
+    Render-Json -path $beforeJson -stats $stats
+    Write-Host "  Baseline salvo em $beforeJson" -ForegroundColor Green
+
+    Render-FixBat
+    $fixBat = Get-ChildItem ".\Win11-Gaming-Fix-$Profile.bat" -EA SilentlyContinue
+    if (-not $fixBat) { Write-Host "  Nada pra aplicar no profile $Profile. Abortando." -ForegroundColor Yellow; exit }
+
+    Write-Host ""
+    Write-Host "  Aplicar $($fixBat.Name) agora? Sera criado restore point." -ForegroundColor Yellow
+    Write-Host "  [Y] Sim, aplicar e reiniciar automaticamente"
+    Write-Host "  [M] Manual - abrir o .bat pra eu revisar/aplicar"
+    Write-Host "  [N] Nao, so gerei o relatorio"
+    $op = Read-Host "  Escolha"
+
+    if ($op -match '^[Yy]') {
+        # Registra RunOnce pra rodar Stage2 apos reboot
+        $cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Auto -Stage2 -Profile $Profile"
+        Set-ItemProperty -Path $runOnceKey -Name 'Win11GamingAudit-Stage2' -Value $cmd -Force
+        Write-Host "  Post-reboot scheduled. Aplicando fix..." -ForegroundColor Cyan
+        Start-Process cmd.exe -ArgumentList "/c `"$($fixBat.FullName)`"" -Verb RunAs -Wait
+        Write-Host ""
+        Write-Host "  Reiniciando em 15 segundos. Ctrl+C pra cancelar." -ForegroundColor Yellow
+        for ($i=15; $i -gt 0; $i--) { Write-Host -NoNewline "`r  $i..."; Start-Sleep 1 }
+        shutdown /r /t 0
+    } elseif ($op -match '^[Mm]') {
+        notepad $fixBat.FullName
+        Write-Host "  Rode manualmente e depois: .\Win11-Gaming-Audit.ps1 -Compare `"$beforeJson,<after.json>`"" -ForegroundColor Cyan
+    }
+    exit
+}
+
+if ($Stage2) {
+    # STAGE 2: post-reboot, re-scan and compare
+    Remove-ItemProperty -Path $runOnceKey -Name 'Win11GamingAudit-Stage2' -EA SilentlyContinue
+    Show-IntroBanner
+    Write-Host "  MODO AUTO - Stage 2/2 (pos-reboot)" -ForegroundColor Magenta
+    Write-Host ""
+    $hardware = Get-HardwareInventory
+    Invoke-Audit
+    $stats = Render-Console
+    Render-Json -path $afterJson -stats $stats
+    Write-Host ""
+    Write-Host "  Comparando antes vs depois..." -ForegroundColor Cyan
+    Start-Sleep 2
+    Compare-Audits -BeforePath $beforeJson -AfterPath $afterJson
+    Write-Host ""
+    Write-Host "  Instale o Sentinel pra proteger contra Windows Update:" -ForegroundColor Yellow
+    Write-Host "    .\Win11-Gaming-Sentinel.ps1 -Install" -ForegroundColor White
+    exit
+}
+
+# ============================================================================
+# MODO PADRAO
+# ============================================================================
 Show-IntroBanner
+
+# Se rodou sem nenhum parametro relevante, mostra menu interativo
+$hasAction = $GenerateFix -or $RemoveBloat -or $OutputHtml -or $OutputJson -or $WithTemps
+if (-not $hasAction) {
+    while ($true) {
+        $choice = Show-StartupMenu
+        switch ($choice) {
+            '1' { break }
+            '2' { & $PSCommandPath -Auto -Profile $Profile; exit }
+            '3' { & $PSCommandPath -GenerateFix -Profile $Profile; exit }
+            '4' {
+                $p = Read-Host "  Paths dos JSONs (before.json,after.json)"
+                & $PSCommandPath -Compare $p; exit
+            }
+            '5' {
+                $sent = Join-Path $PSScriptRoot 'Win11-Gaming-Sentinel.ps1'
+                if (-not (Test-Path $sent)) { $sent = '.\Win11-Gaming-Sentinel.ps1' }
+                & $sent -Install; exit
+            }
+            'h' { Show-Help; continue }
+            'H' { Show-Help; continue }
+            'x' { exit }
+            'X' { exit }
+            default { Write-Host "  Opcao invalida." -ForegroundColor Red; Start-Sleep 1 }
+        }
+        if ($choice -eq '1') { break }
+    }
+}
+
+$hardware = Get-HardwareInventory
+Show-Hardware $hardware
 Invoke-Audit
 $stats = Render-Console
 Show-ScoreReveal -Score $stats.Score
