@@ -112,15 +112,27 @@ function Show-FlowDiagram {
 
 function Show-StartupMenu {
     Show-FlowDiagram
-    Write-Host "  O que voce quer fazer agora?" -ForegroundColor Cyan
+    Write-Host "  MENU (ordem = jornada recomendada)" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "    [1] Somente SCAN  (read-only, nao modifica nada) - RECOMENDADO comecar aqui" -ForegroundColor White
-    Write-Host "    [2] AUTO  (scan + fix + reboot + compare automatico)" -ForegroundColor White
-    Write-Host "    [3] Gerar FIX.BAT  (scan + gera .bat, voce aplica depois)" -ForegroundColor White
-    Write-Host "    [4] COMPARAR  dois audits antigos (JSONs)" -ForegroundColor White
-    Write-Host "    [5] INSTALAR SENTINEL  (monitora drift pos-update)" -ForegroundColor White
-    Write-Host "    [H] Help - explicacao detalhada" -ForegroundColor DarkGray
+    Write-Host "  -- DIAGNOSTICO --" -ForegroundColor DarkCyan
+    Write-Host "    [1] SCAN read-only           nao modifica nada (COMECE AQUI)" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  -- OTIMIZACAO --" -ForegroundColor DarkCyan
+    Write-Host "    [2] MODO AUTO                scan + fix + reboot + compare (RECOMENDADO)" -ForegroundColor Green
+    Write-Host "    [3] Gerar FIX.BAT manual     so gera, voce aplica depois" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  -- VALIDACAO --" -ForegroundColor DarkCyan
+    Write-Host "    [4] Comparar dois audits     tabela antes x depois (JSONs)" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  -- PROTECAO --" -ForegroundColor DarkCyan
+    Write-Host "    [5] INSTALAR SENTINEL        monitora drift pos Windows Update" -ForegroundColor Magenta
+    Write-Host ""
+    Write-Host "  -- OUTROS --" -ForegroundColor DarkCyan
+    Write-Host "    [H] Ajuda detalhada" -ForegroundColor DarkGray
     Write-Host "    [X] Sair" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  Dica: para menu completo com Benchmark + DeepClean + Revert," -ForegroundColor DarkYellow
+    Write-Host "        use .\Win11-Gaming-Launcher.ps1" -ForegroundColor DarkYellow
     Write-Host ""
     $c = Read-Host "  Escolha"
     return $c
