@@ -8,6 +8,15 @@
 !/.github/
 !/LICENSE
 !/README.md
+
+# Monorepo root
+!/package.json
+!/pnpm-workspace.yaml
+!/pnpm-lock.yaml
+!/.npmrc
+!/.nvmrc
+
+# Legacy PS1 scripts (serao movidos para scripts-legacy/ na Semana 3)
 !/Install-Win11GamingSuite.ps1
 !/Win11-Gaming-Audit.ps1
 !/Win11-Gaming-Benchmark.ps1
@@ -15,6 +24,35 @@
 !/Setup-DiscordServer.ps1
 !/Win11-Gaming-Launcher.ps1
 
+# Novos diretorios do monorepo
+!/apps/
+!/services/
+!/web/
+!/scripts-legacy/
+!/docs/
+
 # Dentro de .github, permitir workflows
 !/.github/workflows/
 !/.github/workflows/*.yml
+
+# Dentro de apps/desktop — bloquear build artefacts, permitir source
+apps/desktop/node_modules/
+apps/desktop/build/
+apps/desktop/.svelte-kit/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/schemas/
+# placeholder.png é source do tauri icon; ícones gerados viram os trackados
+apps/desktop/src-tauri/icons/placeholder.png
+# Mobile icon bundles gerados por `tauri icon` — desktop-only por enquanto
+apps/desktop/src-tauri/icons/android/
+apps/desktop/src-tauri/icons/ios/
+
+# Dentro de services e web — bloquear node_modules, permitir source
+services/*/node_modules/
+services/*/.wrangler/
+web/*/node_modules/
+web/*/dist/
+web/*/.astro/
+
+# Plano aprovado (referencia)
+!/docs/

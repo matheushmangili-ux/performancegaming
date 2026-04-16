@@ -1,0 +1,3 @@
+# Placeholder — PS1 scripts live here once Week 3 begins.
+# At that point the legacy scripts at the repo root will be moved to scripts-legacy/
+# and mirror-copied here (lib/json-emit.ps1 added, -StreamJson flag wired).

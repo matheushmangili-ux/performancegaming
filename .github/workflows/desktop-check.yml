@@ -1,0 +1,54 @@
+name: desktop-check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/desktop/**'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/desktop-check.yml'
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/desktop-check.yml'
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri -> target
+
+      - name: Install JS deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Svelte check
+        run: pnpm --filter @clockreaper/desktop check
+
+      - name: Cargo fmt
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --check
+
+      - name: Cargo clippy
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --all-targets -- -D warnings

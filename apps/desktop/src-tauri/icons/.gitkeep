@@ -1,0 +1,2 @@
+# Icon assets (32x32.png, 128x128.png, 128x128@2x.png, icon.icns, icon.ico)
+# generated with: `pnpm tauri icon path/to/logo.png` once the brand logo is ready.

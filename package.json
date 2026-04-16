@@ -1,0 +1,22 @@
+{
+  "name": "clockreaper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ClockReaper — Win11 gaming optimization suite. Cyberpunk UI, streaming audit, per-game profiles.",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20.11",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "desktop:dev": "pnpm --filter @clockreaper/desktop tauri dev",
+    "desktop:build": "pnpm --filter @clockreaper/desktop tauri build",
+    "desktop:check": "pnpm --filter @clockreaper/desktop check",
+    "lint:ps": "pwsh -NoProfile -Command \"Invoke-ScriptAnalyzer -Path . -Recurse -ExcludeRule PSAvoidUsingWriteHost,PSUseShouldProcessForStateChangingFunctions\"",
+    "format": "prettier --write \"**/*.{ts,js,svelte,json,md,yml}\""
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "prettier-plugin-svelte": "^3.2.7"
+  }
+}
