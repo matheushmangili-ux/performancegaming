@@ -1,4 +1,7 @@
 <script lang="ts">
+	import NeonButton from '$lib/components/cyberpunk/NeonButton.svelte';
+	import GlitchText from '$lib/components/cyberpunk/GlitchText.svelte';
+
 	let tagline = 'SYSTEM DIAGNOSTIC // OPTIMIZATION SUITE';
 </script>
 
@@ -8,8 +11,20 @@
 		<p class="tagline anim-caret">{tagline}</p>
 	</div>
 
+	<div class="actions">
+		<NeonButton variant="primary" size="lg" onclick={() => (window.location.href = '/showcase')}>
+			Open Showcase
+		</NeonButton>
+		<NeonButton variant="ghost" size="lg" disabled>Run Scan · Week 4</NeonButton>
+	</div>
+
 	<div class="placeholder">
-		<p>Week 1 scaffolding. Scan UI lands in Week 4.</p>
+		<GlitchText
+			text="WEEK 2 // COMPONENT PRIMITIVES ONLINE"
+			tag="span"
+			mode="always"
+			intensity="subtle"
+		/>
 	</div>
 </section>
 
@@ -51,9 +66,16 @@
 		text-transform: uppercase;
 	}
 
+	.actions {
+		display: flex;
+		gap: var(--space-4);
+		margin-top: var(--space-2);
+	}
+
 	.placeholder {
 		color: var(--color-fg-muted);
 		font-family: var(--font-mono);
 		font-size: var(--fs-xs);
+		letter-spacing: var(--ls-wide);
 	}
 </style>
