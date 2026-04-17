@@ -33,6 +33,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_health,
             commands::audit::run_audit,
+            commands::fix::apply_fix,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ClockReaper");

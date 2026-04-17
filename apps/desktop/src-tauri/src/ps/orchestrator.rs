@@ -38,6 +38,7 @@ impl Serialize for OrchestratorError {
 #[allow(dead_code)] // Benchmark / Sentinel are wired in Weeks 6 and 10.
 pub enum Script {
     Audit,
+    ApplyFix,
     Benchmark,
     Sentinel,
 }
@@ -46,6 +47,7 @@ impl Script {
     fn filename(self) -> &'static str {
         match self {
             Script::Audit => "Win11-Gaming-Audit.ps1",
+            Script::ApplyFix => "apply-fix.ps1",
             Script::Benchmark => "Win11-Gaming-Benchmark.ps1",
             Script::Sentinel => "Win11-Gaming-Sentinel.ps1",
         }
@@ -55,6 +57,7 @@ impl Script {
     fn event_name(self) -> &'static str {
         match self {
             Script::Audit => "scan:event",
+            Script::ApplyFix => "apply:event",
             Script::Benchmark => "benchmark:event",
             Script::Sentinel => "sentinel:event",
         }

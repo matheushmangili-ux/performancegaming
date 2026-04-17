@@ -5,33 +5,59 @@
 	interface Props {
 		finding: Finding;
 		index?: number;
+		selected?: boolean;
+		onToggleSelect?: (id: string) => void;
 	}
 
-	let { finding, index = 0 }: Props = $props();
+	let { finding, index = 0, selected = false, onToggleSelect }: Props = $props();
 
 	let expanded = $state(false);
+	const canFix = $derived(!!finding.fix_cmd);
 
 	function toggle() {
 		expanded = !expanded;
+	}
+
+	function handleToggleSelect() {
+		if (!canFix) return;
+		onToggleSelect?.(finding.id);
 	}
 </script>
 
 <article
 	class="finding finding--{finding.severity.toLowerCase()} anim-finding-enter"
+	class:is-selected={selected}
 	style="animation-delay: {Math.min(index * 40, 400)}ms"
 >
-	<button class="header" type="button" onclick={toggle} aria-expanded={expanded}>
-		<div class="row-top">
-			<SeverityBadge severity={finding.severity} />
-			<span class="category">{finding.category}</span>
-			<span class="chevron" class:is-open={expanded}>▸</span>
-		</div>
-		<h3 class="title">{finding.title}</h3>
-		<p class="current">
-			<span class="lbl">CURRENT:</span>
-			<span class="val">{finding.current}</span>
-		</p>
-	</button>
+	<div class="header">
+		<label class="check" class:is-disabled={!canFix}>
+			<input
+				type="checkbox"
+				checked={selected}
+				disabled={!canFix}
+				onchange={handleToggleSelect}
+				aria-label="Select finding for fix"
+			/>
+			<span class="box" aria-hidden="true">
+				{#if selected}<span class="check-mark">✓</span>{/if}
+			</span>
+		</label>
+		<button class="body-btn" type="button" onclick={toggle} aria-expanded={expanded}>
+			<div class="row-top">
+				<SeverityBadge severity={finding.severity} />
+				<span class="category">{finding.category}</span>
+				{#if !canFix}
+					<span class="no-fix">INFO · no fix</span>
+				{/if}
+				<span class="chevron" class:is-open={expanded}>▸</span>
+			</div>
+			<h3 class="title">{finding.title}</h3>
+			<p class="current">
+				<span class="lbl">CURRENT:</span>
+				<span class="val">{finding.current}</span>
+			</p>
+		</button>
+	</div>
 
 	{#if expanded}
 		<div class="body">
@@ -96,19 +122,94 @@
 	}
 
 	.header {
-		display: block;
-		width: 100%;
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-3);
 		padding: var(--space-4);
+		width: 100%;
+	}
+
+	.check {
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		padding: 4px;
+		margin-top: 2px;
+	}
+	.check.is-disabled {
+		cursor: not-allowed;
+		opacity: 0.35;
+	}
+	.check input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+	.check .box {
+		width: 18px;
+		height: 18px;
+		border: 1px solid var(--color-border-strong);
+		border-radius: var(--radius-sm);
+		background: rgba(0, 0, 0, 0.4);
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		transition: all var(--dur-fast) var(--ease-sharp);
+	}
+	.check:hover:not(.is-disabled) .box {
+		border-color: var(--color-neon-cyan);
+		box-shadow: var(--glow-cyan-xs);
+	}
+	.check input:checked ~ .box {
+		background: var(--color-neon-cyan);
+		border-color: var(--color-neon-cyan);
+		box-shadow: var(--glow-cyan-sm);
+	}
+	.check-mark {
+		color: var(--color-fg-on-neon);
+		font-size: 12px;
+		font-weight: var(--fw-black);
+		line-height: 1;
+	}
+	.check input:focus-visible ~ .box {
+		outline: 2px solid var(--color-neon-cyan);
+		outline-offset: 2px;
+	}
+
+	.body-btn {
+		flex: 1;
 		text-align: left;
 		background: transparent;
 		border: none;
 		cursor: pointer;
 		color: inherit;
+		padding: 0;
+		min-width: 0;
 	}
 
-	.header:focus-visible {
+	.body-btn:focus-visible {
 		outline: 2px solid var(--color-neon-cyan);
-		outline-offset: -2px;
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
+	}
+
+	.no-fix {
+		font-family: var(--font-mono);
+		font-size: 10px;
+		letter-spacing: var(--ls-wide);
+		color: var(--color-fg-muted);
+		padding: 1px 6px;
+		border: 1px solid var(--color-border-faint);
+		border-radius: var(--radius-sm);
+	}
+
+	.finding.is-selected {
+		background:
+			linear-gradient(to right, rgba(0, 240, 255, 0.06), transparent 40%),
+			var(--gradient-panel);
+		border-color: var(--color-border-strong);
 	}
 
 	.row-top {

@@ -5,6 +5,8 @@
 	import ScoreRing from '$lib/components/cyberpunk/ScoreRing.svelte';
 	import TerminalLog, { type LogLine } from '$lib/components/cyberpunk/TerminalLog.svelte';
 	import FindingCard from '$lib/components/findings/FindingCard.svelte';
+	import ApplyBar from '$lib/components/findings/ApplyBar.svelte';
+	import ApplyDialog from '$lib/components/findings/ApplyDialog.svelte';
 	import HardwareCard from '$lib/components/hardware/HardwareCard.svelte';
 	import {
 		scan,
@@ -14,6 +16,12 @@
 		startScan,
 		resetScan
 	} from '$lib/stores/scan';
+	import {
+		apply,
+		attachApplyListener,
+		detachApplyListener,
+		toggleSelection
+	} from '$lib/stores/apply';
 	import type { AuditParams } from '$lib/ipc/tauri';
 
 	let profile = $state<NonNullable<AuditParams['profile']>>('Balanced');
@@ -25,11 +33,13 @@
 		detectedEnv = inTauri ? 'desktop' : 'web';
 		if (inTauri) {
 			await attachListeners();
+			await attachApplyListener();
 		}
 	});
 
 	onDestroy(async () => {
 		await detachListeners();
+		await detachApplyListener();
 	});
 
 	async function handleRun() {
@@ -160,12 +170,20 @@
 			{:else}
 				<div class="findings-list">
 					{#each $scan.findings as f, i (f.id)}
-						<FindingCard finding={f} index={i} />
+						<FindingCard
+							finding={f}
+							index={i}
+							selected={$apply.selection.has(f.id)}
+							onToggleSelect={toggleSelection}
+						/>
 					{/each}
 				</div>
+				<ApplyBar findings={$scan.findings} disabled={!inTauri} />
 			{/if}
 		</section>
 	</div>
+
+	<ApplyDialog findings={$scan.findings} />
 
 	{#if $scan.raw.length > 0 || $scan.stderr.length > 0}
 		<details class="debug">

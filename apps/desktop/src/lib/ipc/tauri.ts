@@ -119,3 +119,85 @@ export function onScanStderr(handler: (line: string) => void): Promise<UnlistenF
 export function onScanRaw(handler: (line: string) => void): Promise<UnlistenFn> {
 	return listen<{ line: string }>('scan:event:raw', (e) => handler(e.payload.line));
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// Apply Fix
+// Mirror of apply-fix.ps1 protocol.
+// ────────────────────────────────────────────────────────────────────────
+export type ApplyMode = 'fix' | 'revert';
+
+export interface FixPayload {
+	id: string;
+	title: string;
+	severity: string;
+	fix_cmd: string;
+	revert_cmd: string;
+}
+
+export interface ApplyStartEvent {
+	type: 'start';
+	mode: ApplyMode;
+	total: number;
+	restore_pt: boolean;
+	pid: number;
+	ts: string;
+}
+
+export interface ApplyRestorePointEvent {
+	type: 'restore_point';
+	status: 'creating' | 'created' | 'skipped';
+	label?: string;
+	reason?: string;
+}
+
+export type ApplyItemStatus = 'running' | 'ok' | 'failed' | 'skipped';
+
+export interface ApplyItemEvent {
+	type: 'item';
+	id: string;
+	index: number;
+	title: string;
+	status: ApplyItemStatus;
+	command?: string;
+	stdout?: string;
+	stderr?: string;
+	exit_code?: number;
+	message?: string;
+	reason?: string;
+}
+
+export interface ApplyDoneEvent {
+	type: 'done';
+	mode: ApplyMode;
+	applied: number;
+	failed: number;
+	skipped: number;
+	total: number;
+}
+
+export interface ApplyErrorEvent {
+	type: 'error';
+	message: string;
+	where: string;
+}
+
+export type ApplyEvent =
+	| ApplyStartEvent
+	| ApplyRestorePointEvent
+	| ApplyItemEvent
+	| ApplyDoneEvent
+	| ApplyErrorEvent;
+
+export interface ApplyFixParams {
+	fixes: FixPayload[];
+	mode?: ApplyMode;
+	skipRestorePoint?: boolean;
+}
+
+export async function applyFix(params: ApplyFixParams): Promise<void> {
+	await invoke('apply_fix', { params });
+}
+
+export function onApplyEvent(handler: (evt: ApplyEvent) => void): Promise<UnlistenFn> {
+	return listen<ApplyEvent>('apply:event', (e) => handler(e.payload));
+}
