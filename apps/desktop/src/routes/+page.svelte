@@ -12,15 +12,17 @@
 	</div>
 
 	<div class="actions">
-		<NeonButton variant="primary" size="lg" onclick={() => (window.location.href = '/showcase')}>
-			Open Showcase
+		<NeonButton variant="primary" size="lg" onclick={() => (window.location.href = '/scan')}>
+			Run System Scan
 		</NeonButton>
-		<NeonButton variant="ghost" size="lg" disabled>Run Scan · Week 4</NeonButton>
+		<NeonButton variant="ghost" size="lg" onclick={() => (window.location.href = '/showcase')}>
+			Component Showcase
+		</NeonButton>
 	</div>
 
 	<div class="placeholder">
 		<GlitchText
-			text="WEEK 2 // COMPONENT PRIMITIVES ONLINE"
+			text="WEEK 4 // STREAMING AUDIT ONLINE"
 			tag="span"
 			mode="always"
 			intensity="subtle"
