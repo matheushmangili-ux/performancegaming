@@ -1,6 +1,7 @@
 use serde::Serialize;
 
 mod commands;
+mod ps;
 
 #[derive(Serialize)]
 pub struct HealthStatus {
@@ -31,7 +32,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             get_health,
-            commands::audit::run_audit_stub,
+            commands::audit::run_audit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ClockReaper");
