@@ -15,14 +15,17 @@
 		<NeonButton variant="primary" size="lg" onclick={() => (window.location.href = '/scan')}>
 			Run System Scan
 		</NeonButton>
+		<NeonButton variant="ghost" size="lg" onclick={() => (window.location.href = '/history')}>
+			History
+		</NeonButton>
 		<NeonButton variant="ghost" size="lg" onclick={() => (window.location.href = '/showcase')}>
-			Component Showcase
+			Components
 		</NeonButton>
 	</div>
 
 	<div class="placeholder">
 		<GlitchText
-			text="WEEK 4 // STREAMING AUDIT ONLINE"
+			text="WEEK 6 // DUAL-MODE + HISTORY ONLINE"
 			tag="span"
 			mode="always"
 			intensity="subtle"

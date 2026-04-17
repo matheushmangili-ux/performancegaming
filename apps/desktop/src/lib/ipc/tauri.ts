@@ -201,3 +201,74 @@ export async function applyFix(params: ApplyFixParams): Promise<void> {
 export function onApplyEvent(handler: (evt: ApplyEvent) => void): Promise<UnlistenFn> {
 	return listen<ApplyEvent>('apply:event', (e) => handler(e.payload));
 }
+
+// ────────────────────────────────────────────────────────────────────────
+// History (scan persistence at %APPDATA%\gg.clockreaper.desktop\history\)
+// ────────────────────────────────────────────────────────────────────────
+export type ScanMode = 'all' | 'general' | 'gaming';
+
+/** Category groupings used by the UI to highlight/filter findings. */
+export const GAMING_CATEGORIES = new Set([
+	'GPU',
+	'Gaming',
+	'Scheduler',
+	'Timer',
+	'Input',
+	'Rede',
+	'BIOS',
+	'Termica',
+	'Memoria',
+	'Jogos',
+	'Energia'
+]);
+
+export const GENERAL_CATEGORIES = new Set([
+	'Servicos',
+	'Telemetria',
+	'Startup',
+	'Storage',
+	'Seguranca',
+	'Energia',
+	'Memoria'
+]);
+
+export function findingMatchesMode(category: string, mode: ScanMode): boolean {
+	if (mode === 'all') return true;
+	if (mode === 'gaming') return GAMING_CATEGORIES.has(category);
+	return GENERAL_CATEGORIES.has(category);
+}
+
+export interface ScanSummary {
+	id: string;
+	timestamp: string;
+	profile: string;
+	mode: ScanMode;
+	score: number;
+	critical: number;
+	high: number;
+	medium: number;
+	total: number;
+	durationMs: number;
+}
+
+export interface FullScanRecord {
+	summary: ScanSummary;
+	hardware: HardwareInventory | null;
+	findings: Finding[];
+}
+
+export async function saveScan(record: FullScanRecord): Promise<void> {
+	await invoke('save_scan', { record });
+}
+
+export async function listScans(): Promise<ScanSummary[]> {
+	return invoke<ScanSummary[]>('list_scans');
+}
+
+export async function loadScan(id: string): Promise<FullScanRecord> {
+	return invoke<FullScanRecord>('load_scan', { id });
+}
+
+export async function deleteScan(id: string): Promise<void> {
+	await invoke('delete_scan', { id });
+}

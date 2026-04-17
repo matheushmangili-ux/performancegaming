@@ -9,10 +9,13 @@ import type {
 	HardwareInventory,
 	ScanEvent,
 	Severity,
-	AuditParams
+	AuditParams,
+	ScanMode,
+	FullScanRecord
 } from '$lib/ipc/tauri';
 import { runAudit, onScanEvent, onScanStderr, onScanRaw } from '$lib/ipc/tauri';
 import type { UnlistenFn } from '@tauri-apps/api/event';
+import { saveScanRecord } from './history';
 
 export type ScanState = 'idle' | 'running' | 'complete' | 'error';
 
@@ -28,6 +31,8 @@ export interface ScanStats {
 interface ScanModel {
 	state: ScanState;
 	startedAt: number | null;
+	profile: string;
+	mode: ScanMode;
 	hardware: HardwareInventory | null;
 	findings: Finding[];
 	stats: ScanStats | null;
@@ -39,6 +44,8 @@ interface ScanModel {
 const initial: ScanModel = {
 	state: 'idle',
 	startedAt: null,
+	profile: 'Balanced',
+	mode: 'gaming',
 	hardware: null,
 	findings: [],
 	stats: null,
@@ -85,7 +92,9 @@ function applyEvent(evt: ScanEvent, s: ScanModel): ScanModel {
 			return {
 				...initial,
 				state: 'running',
-				startedAt: Date.now()
+				startedAt: Date.now(),
+				profile: evt.profile,
+				mode: s.mode
 			};
 		case 'hw':
 			return {
@@ -118,8 +127,8 @@ function applyEvent(evt: ScanEvent, s: ScanModel): ScanModel {
 					}
 				]
 			};
-		case 'done':
-			return {
+		case 'done': {
+			const next: ScanModel = {
 				...s,
 				state: 'complete',
 				stats: {
@@ -131,6 +140,27 @@ function applyEvent(evt: ScanEvent, s: ScanModel): ScanModel {
 					duration_ms: evt.duration_ms
 				}
 			};
+			// Fire-and-forget persistence. History refresh happens automatically
+			// inside saveScanRecord after the write succeeds.
+			const record: FullScanRecord = {
+				summary: {
+					id: `scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+					timestamp: new Date().toISOString(),
+					profile: next.profile,
+					mode: next.mode,
+					score: evt.score,
+					critical: evt.critical,
+					high: evt.high,
+					medium: evt.medium,
+					total: evt.total,
+					durationMs: evt.duration_ms
+				},
+				hardware: next.hardware,
+				findings: next.findings
+			};
+			void saveScanRecord(record);
+			return next;
+		}
 		case 'error':
 			return {
 				...s,
@@ -167,8 +197,15 @@ export async function detachListeners(): Promise<void> {
 }
 
 export async function startScan(params: AuditParams = {}): Promise<void> {
-	if (get(store).state === 'running') return;
-	store.set({ ...initial, state: 'running', startedAt: Date.now() });
+	const current = get(store);
+	if (current.state === 'running') return;
+	store.set({
+		...initial,
+		state: 'running',
+		startedAt: Date.now(),
+		mode: current.mode,
+		profile: params.profile ?? current.profile
+	});
 	try {
 		await runAudit(params);
 	} catch (err) {
@@ -177,6 +214,11 @@ export async function startScan(params: AuditParams = {}): Promise<void> {
 	}
 }
 
+export function setMode(mode: ScanMode): void {
+	store.update((s) => ({ ...s, mode }));
+}
+
 export function resetScan(): void {
-	store.set(initial);
+	const { mode } = get(store);
+	store.set({ ...initial, mode });
 }

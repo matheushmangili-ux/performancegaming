@@ -8,13 +8,15 @@
 	import ApplyBar from '$lib/components/findings/ApplyBar.svelte';
 	import ApplyDialog from '$lib/components/findings/ApplyDialog.svelte';
 	import HardwareCard from '$lib/components/hardware/HardwareCard.svelte';
+	import ModeToggle from '$lib/components/ModeToggle.svelte';
 	import {
 		scan,
 		liveScore,
 		attachListeners,
 		detachListeners,
 		startScan,
-		resetScan
+		resetScan,
+		setMode
 	} from '$lib/stores/scan';
 	import {
 		apply,
@@ -22,7 +24,7 @@
 		detachApplyListener,
 		toggleSelection
 	} from '$lib/stores/apply';
-	import type { AuditParams } from '$lib/ipc/tauri';
+	import { findingMatchesMode, type AuditParams } from '$lib/ipc/tauri';
 
 	let profile = $state<NonNullable<AuditParams['profile']>>('Balanced');
 	let inTauri = $state(false);
@@ -57,6 +59,20 @@
 			severity: 'muted' as const
 		}))
 	);
+
+	// Filter findings based on selected mode. Severity OK/INFO stay visible
+	// regardless because they're informational context, not issues to hide.
+	let visibleFindings = $derived(
+		$scan.findings.filter(
+			(f) =>
+				$scan.mode === 'all' ||
+				findingMatchesMode(f.category, $scan.mode) ||
+				f.severity === 'OK' ||
+				f.severity === 'INFO'
+		)
+	);
+
+	let hiddenCount = $derived($scan.findings.length - visibleFindings.length);
 </script>
 
 <svelte:head>
@@ -94,6 +110,11 @@
 					{p.toUpperCase()}
 				</button>
 			{/each}
+		</div>
+
+		<div class="mode-row">
+			<span class="lbl">VIEW</span>
+			<ModeToggle value={$scan.mode} onChange={setMode} />
 		</div>
 
 		<div class="actions">
@@ -153,23 +174,31 @@
 			<header class="col-head">
 				<h2>FINDINGS</h2>
 				<span class="count">
-					{$scan.findings.length}
-					{$scan.findings.length === 1 ? 'issue' : 'issues'}
+					{visibleFindings.length}
+					{visibleFindings.length === 1 ? 'issue' : 'issues'}
+					{#if hiddenCount > 0}
+						<span class="muted">· {hiddenCount} hidden by {$scan.mode} filter</span>
+					{/if}
 				</span>
 			</header>
 
-			{#if $scan.findings.length === 0}
+			{#if visibleFindings.length === 0}
 				<div class="empty">
 					{#if $scan.state === 'idle'}
 						<p>Awaiting scan. Choose a profile and hit <strong>Run Scan</strong>.</p>
 						<p class="env-hint">Environment: <code>{detectedEnv}</code></p>
 					{:else if $scan.state === 'running'}
 						<GlitchText text="SCANNING..." mode="always" intensity="subtle" />
+					{:else if $scan.findings.length > 0}
+						<p>
+							No findings in <code>{$scan.mode}</code> mode. Switch to <strong>ALL</strong> to
+							see the {$scan.findings.length} other findings.
+						</p>
 					{/if}
 				</div>
 			{:else}
 				<div class="findings-list">
-					{#each $scan.findings as f, i (f.id)}
+					{#each visibleFindings as f, i (f.id)}
 						<FindingCard
 							finding={f}
 							index={i}
@@ -178,7 +207,7 @@
 						/>
 					{/each}
 				</div>
-				<ApplyBar findings={$scan.findings} disabled={!inTauri} />
+				<ApplyBar findings={visibleFindings} disabled={!inTauri} />
 			{/if}
 		</section>
 	</div>
@@ -267,7 +296,8 @@
 		flex-wrap: wrap;
 	}
 
-	.profile-row {
+	.profile-row,
+	.mode-row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-2);
@@ -413,6 +443,10 @@
 		font-family: var(--font-mono);
 		font-size: var(--fs-xs);
 		color: var(--color-fg-muted);
+	}
+	.count .muted {
+		color: var(--color-fg-muted);
+		margin-left: var(--space-2);
 	}
 
 	.empty {

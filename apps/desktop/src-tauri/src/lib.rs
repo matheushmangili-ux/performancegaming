@@ -34,6 +34,10 @@ pub fn run() {
             get_health,
             commands::audit::run_audit,
             commands::fix::apply_fix,
+            commands::history::save_scan,
+            commands::history::list_scans,
+            commands::history::load_scan,
+            commands::history::delete_scan,
         ])
         .run(tauri::generate_context!())
         .expect("error while running ClockReaper");
