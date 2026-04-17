@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="pt-BR">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex, nofollow" />
+		<title>ClockReaper · Beta Access</title>
+		<style>
+			* { box-sizing: border-box; margin: 0; padding: 0; }
+			html, body {
+				height: 100%;
+				background: #0a0a0a;
+				color: #d0d0d0;
+				font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+				font-size: 14px;
+				line-height: 1.6;
+				-webkit-font-smoothing: antialiased;
+			}
+			body {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 24px;
+			}
+			.card {
+				width: 100%;
+				max-width: 480px;
+				background: #141414;
+				border: 1px solid #2a2a2a;
+				padding: 40px;
+			}
+			.brand {
+				font-size: 13px;
+				letter-spacing: 0.3em;
+				color: #808080;
+				text-transform: uppercase;
+				margin-bottom: 32px;
+			}
+			h1 {
+				font-family: Georgia, serif;
+				font-size: 28px;
+				font-weight: 400;
+				color: #f5f5f5;
+				margin-bottom: 8px;
+				letter-spacing: -0.01em;
+			}
+			.sub {
+				color: #808080;
+				font-size: 13px;
+				margin-bottom: 32px;
+			}
+			label {
+				display: block;
+				font-size: 11px;
+				letter-spacing: 0.25em;
+				color: #808080;
+				text-transform: uppercase;
+				margin-bottom: 8px;
+			}
+			input[type="password"] {
+				width: 100%;
+				padding: 14px 16px;
+				background: #1d1d1d;
+				border: 1px solid #2a2a2a;
+				color: #f5f5f5;
+				font-family: inherit;
+				font-size: 16px;
+				letter-spacing: 0.3em;
+				text-align: center;
+				outline: none;
+				transition: border-color 120ms ease;
+			}
+			input[type="password"]:focus {
+				border-color: #505050;
+			}
+			button {
+				width: 100%;
+				padding: 14px 16px;
+				margin-top: 16px;
+				background: #f5f5f5;
+				color: #0a0a0a;
+				border: none;
+				font-family: inherit;
+				font-size: 13px;
+				font-weight: 600;
+				letter-spacing: 0.2em;
+				text-transform: uppercase;
+				cursor: pointer;
+				transition: background 120ms ease;
+			}
+			button:hover { background: #ffffff; }
+			button:disabled { opacity: 0.5; cursor: not-allowed; }
+			.err {
+				margin-top: 16px;
+				padding: 12px 14px;
+				background: #1d1010;
+				border: 1px solid #3a1515;
+				color: #e08080;
+				font-size: 12px;
+				display: none;
+			}
+			.err.is-visible { display: block; }
+			.unlocked { display: none; }
+			.unlocked.is-visible { display: block; }
+			.dl-row {
+				display: flex;
+				flex-direction: column;
+				gap: 12px;
+				margin-top: 24px;
+			}
+			.dl-btn {
+				display: block;
+				padding: 16px 20px;
+				background: #141414;
+				border: 1px solid #404040;
+				color: #f5f5f5;
+				text-decoration: none;
+				transition: border-color 120ms ease, background 120ms ease;
+			}
+			.dl-btn:hover { border-color: #808080; background: #1a1a1a; }
+			.dl-btn .name {
+				display: block;
+				font-size: 14px;
+				font-weight: 600;
+				margin-bottom: 4px;
+			}
+			.dl-btn .meta {
+				display: block;
+				font-size: 11px;
+				color: #808080;
+				letter-spacing: 0.1em;
+			}
+			.dl-btn.primary { border-color: #f5f5f5; }
+			.dl-btn.primary:hover { background: #f5f5f5; color: #0a0a0a; }
+			.dl-btn.primary:hover .meta { color: #404040; }
+			.divider {
+				height: 1px;
+				background: #2a2a2a;
+				margin: 32px 0;
+			}
+			.instructions {
+				font-size: 12px;
+				color: #a0a0a0;
+				line-height: 1.8;
+			}
+			.instructions h2 {
+				font-family: inherit;
+				font-size: 11px;
+				font-weight: 600;
+				color: #f5f5f5;
+				letter-spacing: 0.25em;
+				text-transform: uppercase;
+				margin-bottom: 12px;
+			}
+			.instructions ol {
+				padding-left: 20px;
+			}
+			.instructions li {
+				margin-bottom: 6px;
+			}
+			.instructions code {
+				background: #1d1d1d;
+				border: 1px solid #2a2a2a;
+				padding: 2px 6px;
+				font-size: 11px;
+			}
+			.foot {
+				margin-top: 32px;
+				padding-top: 24px;
+				border-top: 1px solid #2a2a2a;
+				font-size: 11px;
+				color: #606060;
+				text-align: center;
+				letter-spacing: 0.1em;
+			}
+			.warn {
+				margin-top: 16px;
+				padding: 12px 14px;
+				background: #1d1a10;
+				border: 1px solid #3a3015;
+				color: #d0b060;
+				font-size: 12px;
+			}
+		</style>
+	</head>
+	<body>
+		<main class="card">
+			<div class="brand">ClockReaper · Private Beta</div>
+
+			<div id="gate">
+				<h1>Acesso restrito</h1>
+				<p class="sub">Digite o código de convite para baixar a build de teste.</p>
+
+				<form id="gate-form">
+					<label for="pw">Código</label>
+					<input
+						id="pw"
+						type="password"
+						inputmode="numeric"
+						pattern="[0-9]*"
+						maxlength="8"
+						autocomplete="off"
+						autofocus
+					/>
+					<button type="submit">Entrar</button>
+					<div id="err" class="err">Código incorreto.</div>
+				</form>
+			</div>
+
+			<div id="unlocked" class="unlocked">
+				<h1>Beta v0.1.0</h1>
+				<p class="sub">
+					Build interna para teste de UI e fluxo. Ainda sem certificado assinado e sem perfis
+					por jogo — esses chegam nas próximas semanas.
+				</p>
+
+				<div class="dl-row">
+					<a
+						class="dl-btn primary"
+						href="/downloads/ClockReaper_0.1.0_x64-setup.exe"
+						download
+					>
+						<span class="name">ClockReaper Setup (recomendado)</span>
+						<span class="meta">NSIS · 2.4 MB · Windows 11 x64</span>
+					</a>
+					<a
+						class="dl-btn"
+						href="/downloads/ClockReaper_0.1.0_x64_pt-BR.msi"
+						download
+					>
+						<span class="name">ClockReaper MSI</span>
+						<span class="meta">Windows Installer · 3.3 MB · pt-BR</span>
+					</a>
+				</div>
+
+				<div class="warn">
+					O Windows vai mostrar um aviso "Windows protegeu seu PC". Clique em
+					<strong>Mais informações</strong> → <strong>Executar assim mesmo</strong>. Não tem
+					vírus, só falta assinatura digital (chega na semana 11).
+				</div>
+
+				<div class="divider"></div>
+
+				<div class="instructions">
+					<h2>Como testar</h2>
+					<ol>
+						<li>Baixe o instalador acima.</li>
+						<li>Se o Defender bloquear: <code>Mais informações</code> → <code>Executar assim mesmo</code>.</li>
+						<li>Conclua a instalação (Next → Install → Finish).</li>
+						<li>
+							Abra pelo Menu Iniciar. <strong>Importante:</strong> para o scan funcionar,
+							clique com o botão direito em ClockReaper → <code>Executar como administrador</code>.
+						</li>
+						<li>Clique <strong>Run System Scan</strong> e aguarde os findings chegarem.</li>
+						<li>Explore: expanda findings, troque Profile (Safe/Balanced/Competitive) e Mode (Gaming/General/All).</li>
+					</ol>
+				</div>
+
+				<div class="divider"></div>
+
+				<div class="instructions">
+					<h2>Feedback que ajuda</h2>
+					<ol>
+						<li>A UI faz sentido na primeira abertura?</li>
+						<li>O score bateu com o que você esperava do seu PC?</li>
+						<li>Algum finding parece errado ou confuso?</li>
+						<li>O que você tentaria fazer mas não achou?</li>
+						<li>Crashou? Me manda print e a última linha que apareceu.</li>
+					</ol>
+				</div>
+
+				<div class="foot">CLOCKREAPER · BUILD 0.1.0 · BETA CLOSED</div>
+			</div>
+		</main>
+
+		<script>
+			(function () {
+				// Obfuscated check: compare SHA-256 of input to precomputed hash of "0509".
+				// Not cryptographic security — just stops casual view-source snooping.
+				const EXPECTED = '827d5449d1f191275051481e75c4ce10e930a64b5585a546363c340d63347089';
+				const form = document.getElementById('gate-form');
+				const input = document.getElementById('pw');
+				const err = document.getElementById('err');
+				const gate = document.getElementById('gate');
+				const unlocked = document.getElementById('unlocked');
+
+				async function sha256(msg) {
+					const buf = new TextEncoder().encode(msg);
+					const hash = await crypto.subtle.digest('SHA-256', buf);
+					return Array.from(new Uint8Array(hash))
+						.map((b) => b.toString(16).padStart(2, '0'))
+						.join('');
+				}
+
+				// Auto-unlock if session storage already has it (avoids re-typing on refresh).
+				if (sessionStorage.getItem('cr-beta') === '1') {
+					gate.style.display = 'none';
+					unlocked.classList.add('is-visible');
+				}
+
+				form.addEventListener('submit', async (e) => {
+					e.preventDefault();
+					const val = (input.value || '').trim();
+					if (!val) return;
+					const hash = await sha256(val);
+					if (hash === EXPECTED) {
+						sessionStorage.setItem('cr-beta', '1');
+						gate.style.display = 'none';
+						unlocked.classList.add('is-visible');
+					} else {
+						err.classList.add('is-visible');
+						input.value = '';
+						input.focus();
+					}
+				});
+			})();
+		</script>
+	</body>
+</html>
